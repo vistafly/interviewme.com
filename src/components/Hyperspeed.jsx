@@ -377,7 +377,9 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
         });
         this.renderer.setSize(initW, initH, false);
         this.renderer.setPixelRatio(isMobile ? Math.min(window.devicePixelRatio, 1.5) : window.devicePixelRatio);
-        this.composer = new EffectComposer(this.renderer);
+        if (!isMobile) {
+          this.composer = new EffectComposer(this.renderer);
+        }
         container.append(this.renderer.domElement);
 
         this.camera = new THREE.PerspectiveCamera(
@@ -447,42 +449,37 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
         this.renderer.setSize(width, height);
         this.camera.aspect = width / height;
         this.camera.updateProjectionMatrix();
-        this.composer.setSize(width, height);
+        if (this.composer) this.composer.setSize(width, height);
       }
 
       initPasses() {
+        // Mobile: skip all postprocessing — render directly for max performance
+        if (!this.composer) return;
+
         this.renderPass = new RenderPass(this.scene, this.camera);
         this.bloomPass = new EffectPass(
           this.camera,
           new BloomEffect({
             luminanceThreshold: 0.2,
             luminanceSmoothing: 0,
-            resolutionScale: isMobile ? 0.5 : 1
+            resolutionScale: 1
           })
         );
 
+        const smaaPass = new EffectPass(
+          this.camera,
+          new SMAAEffect({
+            preset: SMAAPreset.MEDIUM,
+            searchImage: SMAAEffect.searchImageDataURL,
+            areaImage: SMAAEffect.areaImageDataURL
+          })
+        );
         this.renderPass.renderToScreen = false;
-
-        if (isMobile) {
-          // Skip SMAA on mobile — high-DPI screens don't need it
-          this.bloomPass.renderToScreen = true;
-          this.composer.addPass(this.renderPass);
-          this.composer.addPass(this.bloomPass);
-        } else {
-          const smaaPass = new EffectPass(
-            this.camera,
-            new SMAAEffect({
-              preset: SMAAPreset.MEDIUM,
-              searchImage: SMAAEffect.searchImageDataURL,
-              areaImage: SMAAEffect.areaImageDataURL
-            })
-          );
-          this.bloomPass.renderToScreen = false;
-          smaaPass.renderToScreen = true;
-          this.composer.addPass(this.renderPass);
-          this.composer.addPass(this.bloomPass);
-          this.composer.addPass(smaaPass);
-        }
+        this.bloomPass.renderToScreen = false;
+        smaaPass.renderToScreen = true;
+        this.composer.addPass(this.renderPass);
+        this.composer.addPass(this.bloomPass);
+        this.composer.addPass(smaaPass);
       }
 
       loadAssets() {
@@ -602,18 +599,18 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
       }
 
       render(delta) {
-        this.composer.render(delta);
+        if (this.composer) {
+          this.composer.render(delta);
+        } else {
+          this.renderer.render(this.scene, this.camera);
+        }
       }
 
       dispose() {
         this.disposed = true;
 
-        if (this.renderer) {
-          this.renderer.dispose();
-        }
-        if (this.composer) {
-          this.composer.dispose();
-        }
+        if (this.renderer) this.renderer.dispose();
+        if (this.composer) this.composer.dispose();
         if (this.scene) {
           this.scene.clear();
         }
@@ -633,7 +630,11 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
 
       setSize(width, height, updateStyles) {
         if (width === 0 || height === 0) return;
-        this.composer.setSize(width, height, updateStyles);
+        if (this.composer) {
+          this.composer.setSize(width, height, updateStyles);
+        } else {
+          this.renderer.setSize(width, height, updateStyles);
+        }
       }
 
       tick() {
