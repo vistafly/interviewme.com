@@ -73,7 +73,7 @@ export default function LandingPage({ onStart, onAnalytics }) {
   }, []);
 
   return (
-    <div className="page-enter" style={{ position: 'relative', height: '100vh', overflow: 'hidden' }}>
+    <div className="page-enter" style={{ position: 'relative', height: '100dvh', overflow: 'hidden' }}>
       {/* Orb — full viewport, interactive */}
       <div
         style={{
@@ -182,7 +182,7 @@ export default function LandingPage({ onStart, onAnalytics }) {
         <div
           style={{
             position: 'fixed',
-            top: '45%',
+            top: '40%',
             left: '50%',
             transform: 'translate(-50%, -50%)',
             zIndex: 1,
@@ -227,10 +227,10 @@ export default function LandingPage({ onStart, onAnalytics }) {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'flex-end',
-          height: '100vh',
+          height: '100dvh',
           textAlign: 'center',
           pointerEvents: 'none',
-          padding: '0 24px 80px',
+          padding: '0 24px min(80px, 10dvh)',
         }}
       >
         <h1
