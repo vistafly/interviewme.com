@@ -88,6 +88,12 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
 
     let nsin = val => Math.sin(val) * 0.5 + 0.5;
 
+    // Pre-allocated vectors reused every frame to avoid GC pressure
+    const _distVec = new THREE.Vector3();
+    const _ampVec = new THREE.Vector3();
+    const _offVec = new THREE.Vector3();
+    const _lookAtTarget = new THREE.Vector3();
+
     const distortions = {
       mountainDistortion: {
         uniforms: mountainUniforms,
@@ -111,7 +117,7 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
           let movementProgressFix = 0.02;
           let uFreq = mountainUniforms.uFreq.value;
           let uAmp = mountainUniforms.uAmp.value;
-          let distortion = new THREE.Vector3(
+          _distVec.set(
             Math.cos(progress * Math.PI * uFreq.x + time) * uAmp.x -
               Math.cos(movementProgressFix * Math.PI * uFreq.x + time) * uAmp.x,
             nsin(progress * Math.PI * uFreq.y + time) * uAmp.y -
@@ -119,9 +125,9 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
             nsin(progress * Math.PI * uFreq.z + time) * uAmp.z -
               nsin(movementProgressFix * Math.PI * uFreq.z + time) * uAmp.z
           );
-          let lookAtAmp = new THREE.Vector3(2, 2, 2);
-          let lookAtOffset = new THREE.Vector3(0, 0, -5);
-          return distortion.multiply(lookAtAmp).add(lookAtOffset);
+          _ampVec.set(2, 2, 2);
+          _offVec.set(0, 0, -5);
+          return _distVec.multiply(_ampVec).add(_offVec);
         }
       },
       xyDistortion: {
@@ -143,16 +149,16 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
           let movementProgressFix = 0.02;
           let uFreq = xyUniforms.uFreq.value;
           let uAmp = xyUniforms.uAmp.value;
-          let distortion = new THREE.Vector3(
+          _distVec.set(
             Math.cos(progress * Math.PI * uFreq.x + time) * uAmp.x -
               Math.cos(movementProgressFix * Math.PI * uFreq.x + time) * uAmp.x,
             Math.sin(progress * Math.PI * uFreq.y + time + Math.PI / 2) * uAmp.y -
               Math.sin(movementProgressFix * Math.PI * uFreq.y + time + Math.PI / 2) * uAmp.y,
             0
           );
-          let lookAtAmp = new THREE.Vector3(2, 0.4, 1);
-          let lookAtOffset = new THREE.Vector3(0, 0, -3);
-          return distortion.multiply(lookAtAmp).add(lookAtOffset);
+          _ampVec.set(2, 0.4, 1);
+          _offVec.set(0, 0, -3);
+          return _distVec.multiply(_ampVec).add(_offVec);
         }
       },
       LongRaceDistortion: {
@@ -174,16 +180,16 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
           let camProgress = 0.0125;
           let uFreq = LongRaceUniforms.uFreq.value;
           let uAmp = LongRaceUniforms.uAmp.value;
-          let distortion = new THREE.Vector3(
+          _distVec.set(
             Math.sin(progress * Math.PI * uFreq.x + time) * uAmp.x -
               Math.sin(camProgress * Math.PI * uFreq.x + time) * uAmp.x,
             Math.sin(progress * Math.PI * uFreq.y + time) * uAmp.y -
               Math.sin(camProgress * Math.PI * uFreq.y + time) * uAmp.y,
             0
           );
-          let lookAtAmp = new THREE.Vector3(1, 1, 0);
-          let lookAtOffset = new THREE.Vector3(0, 0, -5);
-          return distortion.multiply(lookAtAmp).add(lookAtOffset);
+          _ampVec.set(1, 1, 0);
+          _offVec.set(0, 0, -5);
+          return _distVec.multiply(_ampVec).add(_offVec);
         }
       },
       turbulentDistortion: {
@@ -227,14 +233,14 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
             -nsin(Math.PI * p * uFreq.z + time) * uAmp.z -
             Math.pow(nsin(Math.PI * p * uFreq.w + time / (uFreq.z / uFreq.w)), 5) * uAmp.w;
 
-          let distortion = new THREE.Vector3(
+          _distVec.set(
             getX(progress) - getX(progress + 0.007),
             getY(progress) - getY(progress + 0.007),
             0
           );
-          let lookAtAmp = new THREE.Vector3(-2, -5, 0);
-          let lookAtOffset = new THREE.Vector3(0, 0, -10);
-          return distortion.multiply(lookAtAmp).add(lookAtOffset);
+          _ampVec.set(-2, -5, 0);
+          _offVec.set(0, 0, -10);
+          return _distVec.multiply(_ampVec).add(_offVec);
         }
       },
       turbulentDistortionStill: {
@@ -332,14 +338,14 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
           const getX = p => Math.sin(p * Math.PI * uFreq.x + time) * uAmp.x;
           const getY = p => Math.pow(p * uPowY.x, uPowY.y) + Math.sin(p * Math.PI * uFreq.y + time) * uAmp.y;
 
-          let distortion = new THREE.Vector3(
+          _distVec.set(
             getX(progress) - getX(progress + 0.01),
             getY(progress) - getY(progress + 0.01),
             0
           );
-          let lookAtAmp = new THREE.Vector3(-2, -4, 0);
-          let lookAtOffset = new THREE.Vector3(0, 0, -10);
-          return distortion.multiply(lookAtAmp).add(lookAtOffset);
+          _ampVec.set(-2, -4, 0);
+          _offVec.set(0, 0, -10);
+          return _distVec.multiply(_ampVec).add(_offVec);
         }
       }
     };
@@ -516,6 +522,9 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
         this.leftSticks.init();
         this.leftSticks.mesh.position.setX(-(options.roadWidth + options.islandWidth / 2));
 
+        // Pre-compile all shaders upfront to avoid mid-animation stalls
+        this.renderer.compile(this.scene, this.camera);
+
         this.container.addEventListener('mousedown', this.onMouseDown);
         this.container.addEventListener('mouseup', this.onMouseUp);
         this.container.addEventListener('mouseout', this.onMouseUp);
@@ -579,13 +588,12 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
         if (this.options.distortion.getJS) {
           const distortion = this.options.distortion.getJS(0.025, time);
 
-          this.camera.lookAt(
-            new THREE.Vector3(
-              this.camera.position.x + distortion.x,
-              this.camera.position.y + distortion.y,
-              this.camera.position.z + distortion.z
-            )
+          _lookAtTarget.set(
+            this.camera.position.x + distortion.x,
+            this.camera.position.y + distortion.y,
+            this.camera.position.z + distortion.z
           );
+          this.camera.lookAt(_lookAtTarget);
           updateCamera = true;
         }
         if (updateCamera) {
@@ -635,6 +643,12 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
         // Skip everything while the container has no size (fade-in not yet painted)
         const canvas = this.renderer.domElement;
         if (canvas.clientWidth === 0 || canvas.clientHeight === 0) return;
+
+        // Throttle to ~30fps on mobile to prevent thermal throttling
+        if (isMobile) {
+          this._frameSkip = !this._frameSkip;
+          if (this._frameSkip) return;
+        }
 
         if (resizeRendererToDisplaySize(this.renderer, this.setSize)) {
           this.camera.aspect = canvas.clientWidth / canvas.clientHeight;
