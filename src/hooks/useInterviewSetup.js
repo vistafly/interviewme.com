@@ -5,6 +5,7 @@ const MIN_GENERATING_MS = 5000;
 
 export function useInterviewSetup() {
   // TODO: remove mock defaults before production
+  const [jobTitle, setJobTitle] = useState('Senior Frontend Engineer');
   const [jobDescription, setJobDescription] = useState(
     `We are looking for a Senior Frontend Engineer to join our team and help build the next generation of our web platform. You will work closely with designers, product managers, and backend engineers to deliver high-quality user experiences.
 
@@ -34,13 +35,17 @@ Requirements:
     : 0;
 
   const canGenerate =
-    companyName.trim().length >= 2 && jdWordCount >= 50;
+    companyName.trim().length >= 2 && jobTitle.trim().length >= 2 && jdWordCount >= 50;
 
   const generate = useCallback(async () => {
     // Client-side validation
     const words = jobDescription.trim().split(/\s+/).length;
     if (companyName.trim().length < 2) {
       setError('Please enter a valid company name.');
+      return null;
+    }
+    if (jobTitle.trim().length < 2) {
+      setError('Please enter the job title you are applying for.');
       return null;
     }
     if (words < 50) {
@@ -55,7 +60,7 @@ Requirements:
     const startedAt = Date.now();
 
     try {
-      const result = await generateInterview(jobDescription, companyName);
+      const result = await generateInterview(jobDescription, companyName, jobTitle);
 
       // Ensure the animation plays long enough to feel intentional
       const elapsed = Date.now() - startedAt;
@@ -76,11 +81,13 @@ Requirements:
       setProgress(0);
       return null;
     }
-  }, [jobDescription, companyName]);
+  }, [jobDescription, companyName, jobTitle]);
 
   return {
     jobDescription,
     setJobDescription,
+    jobTitle,
+    setJobTitle,
     companyName,
     setCompanyName,
     generating,

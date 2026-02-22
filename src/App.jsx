@@ -10,6 +10,7 @@ export default function App() {
   const [page, setPage] = useState('landing');
   const [questions, setQuestions] = useState([]);
   const [companyName, setCompanyName] = useState('');
+  const [jobTitle, setJobTitle] = useState('');
 
   return (
     <AuthProvider>
@@ -20,9 +21,10 @@ export default function App() {
         <Suspense fallback={null}>
           <SetupPage
             onBack={() => setPage('landing')}
-            onReady={(qs, co) => {
+            onReady={(qs, co, jt) => {
               setQuestions(qs);
               setCompanyName(co);
+              setJobTitle(jt);
               setPage('interview');
             }}
           />
@@ -33,6 +35,7 @@ export default function App() {
           <InterviewPage
             questions={questions}
             company={companyName}
+            jobTitle={jobTitle}
             onExit={() => setPage('landing')}
           />
         </Suspense>

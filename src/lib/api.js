@@ -23,7 +23,7 @@ All questions must directly reference skills, tools, or responsibilities mention
 Respond with ONLY valid JSON in this format, no markdown wrapping:
 {"questions": [...]}`;
 
-export async function generateInterview(jobDescription, companyName) {
+export async function generateInterview(jobDescription, companyName, jobTitle) {
   const response = await fetch('/api/interview', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -34,7 +34,7 @@ export async function generateInterview(jobDescription, companyName) {
       messages: [
         {
           role: 'user',
-          content: `Company: ${companyName}\n\nJob Description:\n${jobDescription}`,
+          content: `Company: ${companyName}\nJob Title: ${jobTitle}\n\nJob Description:\n${jobDescription}`,
         },
       ],
     }),

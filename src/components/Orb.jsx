@@ -221,7 +221,18 @@ export default function Orb({
     const container = ctnDom.current;
     if (!container) return;
 
-    const renderer = new Renderer({ alpha: true, premultipliedAlpha: false });
+    // Detect software renderer from a temporary context
+    const tmpCanvas = document.createElement('canvas');
+    const tmpGl = tmpCanvas.getContext('webgl');
+    const rendererInfo = tmpGl ? (tmpGl.getParameter(tmpGl.RENDERER) || '') : '';
+    const isSoftware = /swiftshader|llvmpipe|software|webkit webgl/i.test(rendererInfo);
+    tmpCanvas.remove();
+
+    const effectiveDpr = quality != null
+      ? quality
+      : (isSoftware ? 0.25 : (window.devicePixelRatio || 1));
+
+    const renderer = new Renderer({ alpha: true, premultipliedAlpha: false, dpr: effectiveDpr });
     const gl = renderer.gl;
     gl.clearColor(0, 0, 0, 0);
     container.appendChild(gl.canvas);
@@ -254,10 +265,6 @@ export default function Orb({
 
     const mesh = new Mesh(gl, { geometry, program });
 
-    // Detect software renderer
-    const rendererInfo = gl.getParameter(gl.RENDERER) || '';
-    const isSoftware = /swiftshader|llvmpipe|software|webkit webgl/i.test(rendererInfo);
-    const qualityScale = quality != null ? quality : (isSoftware ? 0.25 : Math.min(window.devicePixelRatio || 1, 1.5));
     const targetInterval = isSoftware ? 33.3 : 0;
 
     let cachedRect = container.getBoundingClientRect();
@@ -266,9 +273,7 @@ export default function Orb({
       if (!container) return;
       const w = container.clientWidth;
       const h = container.clientHeight;
-      renderer.setSize(Math.round(w * qualityScale), Math.round(h * qualityScale));
-      gl.canvas.style.width = w + 'px';
-      gl.canvas.style.height = h + 'px';
+      renderer.setSize(w, h);
       program.uniforms.iResolution.value.set(gl.canvas.width, gl.canvas.height, gl.canvas.width / gl.canvas.height);
       cachedRect = container.getBoundingClientRect();
     }

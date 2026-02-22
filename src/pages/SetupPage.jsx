@@ -57,6 +57,8 @@ export default function SetupPage({ onBack, onReady }) {
   const {
     jobDescription,
     setJobDescription,
+    jobTitle,
+    setJobTitle,
     companyName,
     setCompanyName,
     generating,
@@ -71,7 +73,7 @@ export default function SetupPage({ onBack, onReady }) {
   const handleGenerate = async () => {
     const result = await generate();
     if (result?.questions) {
-      onReady(result.questions, companyName);
+      onReady(result.questions, companyName, jobTitle);
     }
   };
 
@@ -187,9 +189,9 @@ export default function SetupPage({ onBack, onReady }) {
         style={{
           position: 'relative',
           zIndex: 1,
-          maxWidth: 520,
+          maxWidth: 'clamp(400px, 50vw, 880px)',
           margin: '0 auto',
-          padding: '120px 24px 80px',
+          padding: `${isMobile ? '72px' : 'clamp(88px, 10vh, 160px)'} clamp(16px, 4vw, 40px) ${isMobile ? '24px' : 'clamp(40px, 8vh, 80px)'}`,
         }}
       >
         {!generating ? (
@@ -201,14 +203,14 @@ export default function SetupPage({ onBack, onReady }) {
               background: 'rgba(255, 255, 255, 0.03)',
               border: '1px solid rgba(255, 255, 255, 0.06)',
               borderRadius: tokens.radius.xl,
-              padding: '36px 32px 32px',
+              padding: 'clamp(24px, 3vw, 40px) clamp(20px, 2.5vw, 36px) clamp(24px, 2.5vw, 36px)',
               animation: 'fadeUp 0.7s var(--ease-snappy) both',
             }}
           >
             <h1
               style={{
                 fontFamily: tokens.font.body,
-                fontSize: 'clamp(28px, 4vw, 38px)',
+                fontSize: 'clamp(24px, 3.5vw, 42px)',
                 fontWeight: 300,
                 letterSpacing: -0.5,
                 lineHeight: 1.3,
@@ -223,62 +225,99 @@ export default function SetupPage({ onBack, onReady }) {
 
             <p
               style={{
-                fontSize: 13,
+                fontSize: 'clamp(11px, 1.2vw, 14px)',
                 color: 'rgba(255,255,255,0.4)',
                 letterSpacing: 1.5,
                 textTransform: 'uppercase',
                 textAlign: 'center',
-                marginBottom: 32,
+                marginBottom: 'clamp(20px, 3vw, 36px)',
                 animation: 'fadeUp 0.8s var(--ease-snappy) 0.1s both',
               }}
             >
               Paste a job description · tailored mock interview
             </p>
 
-            {/* Company Name */}
+            {/* Company Name + Job Title row */}
             <div
               style={{
-                marginBottom: 20,
-                animation: 'fadeUp 0.7s var(--ease-snappy) 0.15s both',
+                display: 'flex',
+                gap: 'clamp(12px, 1.2vw, 20px)',
+                marginBottom: 'clamp(16px, 1.8vh, 28px)',
+                animation: 'fadeUp 0.7s var(--ease-snappy) 0.12s both',
+                flexWrap: 'wrap',
               }}
             >
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: 10,
-                  fontWeight: 600,
-                  textTransform: 'uppercase',
-                  letterSpacing: 1.5,
-                  color: tokens.color.textSecondary,
-                  marginBottom: 8,
-                }}
-              >
-                Company Name
-              </label>
-              <input
-                type="text"
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                placeholder="e.g. Google, Stripe, Airbnb"
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  fontSize: 15,
-                  background: 'rgba(17, 17, 20, 0.6)',
-                  border: `1px solid ${tokens.color.borderLight}`,
-                  borderRadius: tokens.radius.md,
-                  color: tokens.color.text,
-                  outline: 'none',
-                  transition: `border-color 0.2s ${tokens.ease.snappy}`,
-                }}
-              />
+              <div style={{ flex: '1 1 180px', minWidth: 0 }}>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: 10,
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    letterSpacing: 1.5,
+                    color: tokens.color.textSecondary,
+                    marginBottom: 8,
+                  }}
+                >
+                  Company Name
+                </label>
+                <input
+                  type="text"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  placeholder="e.g. Google, Stripe"
+                  style={{
+                    width: '100%',
+                    padding: 'clamp(10px, 1.2vw, 16px) clamp(12px, 1.5vw, 20px)',
+                    fontSize: 'clamp(13px, 1.4vw, 17px)',
+                    background: 'rgba(17, 17, 20, 0.6)',
+                    border: `1px solid ${tokens.color.borderLight}`,
+                    borderRadius: tokens.radius.md,
+                    color: tokens.color.text,
+                    outline: 'none',
+                    transition: `border-color 0.2s ${tokens.ease.snappy}`,
+                  }}
+                />
+              </div>
+              <div style={{ flex: '1 1 180px', minWidth: 0 }}>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: 10,
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    letterSpacing: 1.5,
+                    color: tokens.color.textSecondary,
+                    marginBottom: 8,
+                  }}
+                >
+                  Job Title
+                </label>
+                <input
+                  type="text"
+                  value={jobTitle}
+                  onChange={(e) => setJobTitle(e.target.value)}
+                  placeholder="e.g. Frontend Engineer"
+                  style={{
+                    width: '100%',
+                    padding: 'clamp(10px, 1.2vw, 16px) clamp(12px, 1.5vw, 20px)',
+                    fontSize: 'clamp(13px, 1.4vw, 17px)',
+                    background: 'rgba(17, 17, 20, 0.6)',
+                    border: `1px solid ${tokens.color.borderLight}`,
+                    borderRadius: tokens.radius.md,
+                    color: tokens.color.text,
+                    outline: 'none',
+                    transition: `border-color 0.2s ${tokens.ease.snappy}`,
+                  }}
+                />
+              </div>
             </div>
 
             {/* Job Description */}
             <div
               style={{
-                marginBottom: 24,
-                animation: 'fadeUp 0.7s var(--ease-snappy) 0.2s both',
+                marginBottom: 'clamp(20px, 2.2vh, 32px)',
+                animation: 'fadeUp 0.7s var(--ease-snappy) 0.22s both',
               }}
             >
               <label
@@ -300,9 +339,9 @@ export default function SetupPage({ onBack, onReady }) {
                 placeholder="Paste the full job description here..."
                 style={{
                   width: '100%',
-                  minHeight: 180,
-                  padding: '12px 16px',
-                  fontSize: 15,
+                  minHeight: isMobile ? 'clamp(120px, 25vh, 260px)' : 'clamp(200px, 35vh, 520px)',
+                  padding: 'clamp(10px, 1.2vw, 16px) clamp(12px, 1.5vw, 20px)',
+                  fontSize: 'clamp(13px, 1.4vw, 17px)',
                   lineHeight: 1.6,
                   background: 'rgba(17, 17, 20, 0.6)',
                   border: `1px solid ${tokens.color.borderLight}`,
@@ -345,13 +384,13 @@ export default function SetupPage({ onBack, onReady }) {
 
             {/* Generate Button */}
             <div
-              style={{ animation: 'fadeUp 0.7s var(--ease-snappy) 0.25s both' }}
+              style={{ animation: 'fadeUp 0.7s var(--ease-snappy) 0.27s both' }}
             >
               <Button
                 variant="primary"
                 onClick={handleGenerate}
                 disabled={!canGenerate}
-                style={{ width: '100%', padding: '14px 24px', fontSize: 15 }}
+                style={{ width: '100%', padding: 'clamp(12px, 1.4vw, 18px) clamp(18px, 2.5vw, 32px)', fontSize: 'clamp(14px, 1.4vw, 17px)' }}
               >
                 Generate Interview
               </Button>
@@ -364,7 +403,7 @@ export default function SetupPage({ onBack, onReady }) {
                 color: tokens.color.textMuted,
                 textAlign: 'center',
                 marginTop: 16,
-                animation: 'fadeUp 0.7s var(--ease-snappy) 0.3s both',
+                animation: 'fadeUp 0.7s var(--ease-snappy) 0.32s both',
               }}
             >
               AI will generate 8 tailored questions based on the role.

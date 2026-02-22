@@ -25,7 +25,7 @@ function timerColor(seconds) {
   return tokens.color.error;
 }
 
-export default function InterviewPage({ questions, company, onExit }) {
+export default function InterviewPage({ questions, company, jobTitle, onExit }) {
   const { user } = useAuth();
   const [lang, setLang] = useState('en-US');
   const [showSettings, setShowSettings] = useState(false);
@@ -76,6 +76,7 @@ export default function InterviewPage({ questions, company, onExit }) {
     const session = {
       date: new Date().toISOString(),
       company,
+      jobTitle: jobTitle || '',
       pct: overallPct,
       grade: overallGrade,
       count: sessionData.length,
@@ -154,7 +155,7 @@ export default function InterviewPage({ questions, company, onExit }) {
         }
         center={
           <span style={{ fontSize: 12, color: tokens.color.textMuted }}>
-            {company}
+            {company}{jobTitle ? ` · ${jobTitle}` : ''}
           </span>
         }
         right={
