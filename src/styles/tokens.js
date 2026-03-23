@@ -26,13 +26,17 @@ export const tokens = {
 
 export function gradeColor(grade) {
   const map = {
-    A: '#3ee8b5',
-    'B+': '#3ee8b5',
-    B: '#5eaaff',
+    'A':  '#3ee8b5',
+    'A-': '#3ee8b5',
+    'B+': '#5eaaff',
+    'B':  '#5eaaff',
+    'B-': '#5eaaff',
     'C+': '#f0c654',
-    C: '#f0c654',
-    D: '#ff7e6b',
-    F: '#ff5252',
+    'C':  '#f0c654',
+    'C-': '#f0c654',
+    'D+': '#ff7e6b',
+    'D':  '#ff7e6b',
+    'F':  '#ff5252',
   };
   return map[grade] || '#666';
 }

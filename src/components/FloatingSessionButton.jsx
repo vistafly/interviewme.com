@@ -101,7 +101,7 @@ export default function FloatingSessionButton({ count, onClick, onSideChange }) 
         ...(isLeft ? { left: EDGE_MARGIN } : { right: EDGE_MARGIN }),
       };
 
-  const label = `${count} session${count !== 1 ? 's' : ''}`;
+  const label = count > 0 ? `${count} session${count !== 1 ? 's' : ''}` : 'Analytics';
 
   return (
     <div

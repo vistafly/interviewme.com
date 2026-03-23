@@ -164,6 +164,11 @@ textarea:focus {
   50% { transform: scale(1.04); }
 }
 
+@keyframes breathe {
+  0%, 100% { opacity: 0.5; transform: scale(0.97); }
+  50% { opacity: 1; transform: scale(1.03); }
+}
+
 @keyframes gentleFloat {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-8px); }
@@ -197,6 +202,17 @@ textarea:focus {
 @keyframes glowPulse {
   0%, 100% { opacity: 0.5; }
   50%      { opacity: 1;   }
+}
+
+
+/* --- Quota Orb Glow Cycle --- */
+@keyframes quota-orb-cycle {
+  0%   { box-shadow: 0 0 5px #9c43fe, 0 0 11px rgba(156,67,254,0.85), 0 0 20px rgba(76,194,233,0.25); }
+  50%  { box-shadow: 0 0 5px #4cc2e9, 0 0 11px rgba(76,194,233,0.85), 0 0 20px rgba(156,67,254,0.25); }
+  100% { box-shadow: 0 0 5px #9c43fe, 0 0 11px rgba(156,67,254,0.85), 0 0 20px rgba(76,194,233,0.25); }
+}
+.quota-orb {
+  animation: quota-orb-cycle 3s ease-in-out infinite;
 }
 
 /* --- Page Wrapper Animation --- */

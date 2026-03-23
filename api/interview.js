@@ -1,75 +1,63 @@
-const MOCK_QUESTIONS = [
-  {
-    q: "Tell me about yourself and why you're interested in this role.",
-    tip: "Keep it under 2 minutes. Focus on relevant experience, key achievements, and why this specific role excites you.",
-    keys: ["experience", "background", "passionate", "career growth", "skills", "team"]
-  },
-  {
-    q: "Describe a time you had to learn a new technology or tool quickly to deliver on a project.",
-    tip: "Use the STAR method: Situation, Task, Action, Result. Emphasize your learning process and the outcome.",
-    keys: ["learned quickly", "deadline", "documentation", "hands-on", "delivered", "outcome"]
-  },
-  {
-    q: "Tell me about a time you disagreed with a teammate or manager. How did you handle it?",
-    tip: "Show emotional intelligence. Focus on listening, finding common ground, and reaching a productive resolution.",
-    keys: ["disagreement", "listened", "perspective", "compromise", "resolved", "professional"]
-  },
-  {
-    q: "Walk me through how you would design and implement a REST API for a new feature.",
-    tip: "Discuss endpoints, HTTP methods, data models, authentication, error handling, and testing strategy.",
-    keys: ["endpoints", "authentication", "error handling", "database", "testing", "documentation"]
-  },
-  {
-    q: "How do you approach debugging a complex issue in production?",
-    tip: "Describe your systematic process: logs, reproduction steps, isolating variables, and preventing recurrence.",
-    keys: ["logs", "reproduce", "isolate", "root cause", "monitoring", "prevention"]
-  },
-  {
-    q: "What interests you about our company and our mission?",
-    tip: "Show you've done your research. Connect their mission to your personal values and career goals.",
-    keys: ["mission", "product", "culture", "growth", "impact", "values"]
-  },
-  {
-    q: "Imagine you're given a project with unclear requirements and a tight deadline. How would you proceed?",
-    tip: "Show you can handle ambiguity. Talk about clarifying priorities, communicating with stakeholders, and iterating.",
-    keys: ["clarify requirements", "stakeholders", "prioritize", "iterate", "communicate", "MVP"]
-  },
-  {
-    q: "What questions do you have for us about the team or the role?",
-    tip: "Ask thoughtful questions about team culture, growth opportunities, tech stack decisions, or current challenges.",
-    keys: ["team structure", "growth", "challenges", "tech stack", "mentorship", "roadmap"]
-  }
-];
-
-function buildMockResponse() {
-  return {
-    id: 'mock_msg_' + Date.now(),
-    type: 'message',
-    role: 'assistant',
-    content: [{ type: 'text', text: JSON.stringify({ questions: MOCK_QUESTIONS }) }],
-    model: 'mock-mode',
-    stop_reason: 'end_turn',
-    usage: { input_tokens: 0, output_tokens: 0 }
-  };
-}
+import { verifyIdToken } from './_firebase-admin.js';
+import { checkAndDecrementQuota } from './_quota.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Default to mock mode when MOCK_MODE isn't explicitly set to 'false'
-  const MOCK_MODE = process.env.MOCK_MODE !== 'false';
-
-  if (MOCK_MODE) {
-    await new Promise((r) => setTimeout(r, 1200));
-    return res.json(buildMockResponse());
-  }
-
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
   }
+
+  // ── Quota gate ─────────────────────────────────────────────────────────────
+  let uid = null;
+  const authHeader = req.headers['authorization'] || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+  if (token) {
+    try {
+      const decoded = await verifyIdToken(token);
+      uid = decoded.uid;
+    } catch {
+      // Invalid/expired token — treat as anonymous
+    }
+  }
+
+  const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket?.remoteAddress || 'unknown';
+
+  try {
+    const quota = await checkAndDecrementQuota(uid, ip);
+    if (!quota.allowed) {
+      return res.status(429).json({
+        error: 'quota_exceeded',
+        remaining: 0,
+        limit: quota.limit,
+        isPro: quota.isPro,
+        isAnon: quota.isAnon,
+      });
+    }
+  } catch (err) {
+    // If quota check fails (e.g. Firebase Admin not configured), fail open in dev
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[quota]', err.message);
+      return res.status(500).json({ error: 'Service temporarily unavailable.' });
+    }
+  }
+  // ── End quota gate ──────────────────────────────────────────────────────────
+
+  // Lock model and cap tokens server-side — prevent API key abuse via body manipulation
+  const { system, messages } = req.body || {};
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ error: 'Missing messages array' });
+  }
+  const safeBody = {
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 2048,
+    system,
+    messages,
+  };
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -79,7 +67,7 @@ export default async function handler(req, res) {
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
       },
-      body: JSON.stringify(req.body),
+      body: JSON.stringify(safeBody),
     });
 
     const data = await response.json();
@@ -90,6 +78,7 @@ export default async function handler(req, res) {
 
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[interview]', err.message);
+    res.status(500).json({ error: 'An error occurred. Please try again.' });
   }
 }

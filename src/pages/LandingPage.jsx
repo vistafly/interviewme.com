@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { tokens } from '../styles/tokens';
 import { loadHistory, loadHistoryForUser } from '../lib/storage';
+import { loadUsageDoc } from '../lib/firestore';
 import { setTransitionState } from '../lib/perfProfiler';
 import { useAuth } from '../contexts/AuthContext';
 import { User } from 'lucide-react';
@@ -13,6 +14,7 @@ import FloatingSessionButton from '../components/FloatingSessionButton';
 import AuthCard from '../components/AuthCard';
 import UserMenu from '../components/UserMenu';
 import ScrambleText from '../components/ScrambleText';
+import PrivacyPage from './PrivacyPage';
 
 const HOVER_FILTER = 'brightness(1.8) saturate(0.35) contrast(1.1)';
 const BASE_FILTER = 'brightness(1) saturate(1)';
@@ -42,7 +44,109 @@ const getUserFirstName = (user) => {
   return null;
 };
 
-export default function LandingPage({ onStart, onAnalytics }) {
+// ── Quota indicator ───────────────────────────────────────────────────────────
+// Orb exact colors: purple #9c43fe (156,67,254), cyan #4cc2e9 (76,194,233)
+const ORB_GLOW = {
+  display: 'inline-block',
+  width: 9,
+  height: 9,
+  borderRadius: '50%',
+  background: 'radial-gradient(circle, #9c43fe 0%, #4cc2e9 50%, #101499 100%)',
+  transition: 'all 0.55s cubic-bezier(0.16, 1, 0.3, 1)',
+};
+
+const ORB_BRIGHT = {
+  display: 'inline-block',
+  width: 9,
+  height: 9,
+  borderRadius: '50%',
+  background: 'radial-gradient(circle, #ffffff 0%, #dce8ff 50%, #a8bce0 100%)',
+  boxShadow: '0 0 5px rgba(255,255,255,0.95), 0 0 12px rgba(210,225,255,0.8), 0 0 22px rgba(180,200,255,0.45)',
+  transition: 'all 0.55s cubic-bezier(0.16, 1, 0.3, 1)',
+};
+
+const ORB_DIM = {
+  display: 'inline-block',
+  width: 9,
+  height: 9,
+  borderRadius: '50%',
+  background: 'rgba(255,255,255,0.03)',
+  boxShadow: 'none',
+  border: '1px solid rgba(255,255,255,0.06)',
+  transition: 'all 0.7s cubic-bezier(0.4,0,0.2,1)',
+};
+
+const LABEL = {
+  fontFamily: 'var(--font-body, "DM Sans", sans-serif)',
+  fontSize: 10,
+  color: 'rgba(255,255,255,0.2)',
+  letterSpacing: 1.5,
+  textTransform: 'uppercase',
+  marginLeft: 7,
+};
+
+function QuotaIndicator({ usage, isAnon, ctaHover }) {
+  const FREE_LIMIT = 5;
+  const ANON_LIMIT = 3;
+  const activeOrb = ctaHover ? ORB_BRIGHT : ORB_GLOW;
+  const activeClass = ctaHover ? '' : 'quota-orb';
+
+  if (isAnon) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 11 }}>
+        {Array.from({ length: ANON_LIMIT }).map((_, i) => (
+          <span key={i} className={activeClass} style={activeOrb} />
+        ))}
+        <span style={LABEL}>3 free · sign in for 5</span>
+      </div>
+    );
+  }
+
+  // No usage doc yet = 0 used today
+  const { count = 0, isPro = false } = usage ?? {};
+  const limit = isPro ? 30 : FREE_LIMIT;
+  const remaining = Math.max(0, limit - count);
+
+  if (isPro) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 11 }}>
+        <span style={{
+          fontFamily: 'var(--font-body, "DM Sans", sans-serif)',
+          fontSize: 9,
+          fontWeight: 500,
+          color: 'rgba(76,194,233,0.65)',
+          letterSpacing: 1.8,
+          textTransform: 'uppercase',
+          border: '1px solid rgba(76,194,233,0.2)',
+          borderRadius: 4,
+          padding: '2px 7px',
+          boxShadow: '0 0 8px rgba(76,194,233,0.12)',
+          textShadow: '0 0 6px rgba(76,194,233,0.5)',
+        }}>
+          Pro
+        </span>
+        <span style={LABEL}>{remaining} of {limit} today</span>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 11 }}>
+      {Array.from({ length: FREE_LIMIT }).map((_, i) => (
+        <span key={i} className={i < count ? '' : activeClass} style={i < count ? ORB_DIM : activeOrb} />
+      ))}
+      <span style={{
+        ...LABEL,
+        color: remaining === 0 ? 'rgba(255,82,82,0.4)' : 'rgba(255,255,255,0.2)',
+        transition: 'color 0.7s ease',
+      }}>
+        {remaining === 0 ? 'limit reached' : `${remaining} left today`}
+      </span>
+    </div>
+  );
+}
+
+export default function LandingPage({ onStart, onAnalytics, onAdmin }) {
   const { user, loading } = useAuth();
   const [history, setHistory] = useState(() => loadHistory());
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -50,11 +154,19 @@ export default function LandingPage({ onStart, onAnalytics }) {
   const [ctaHover, setCtaHover] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [pendingStart, setPendingStart] = useState(false);
+  const [quota, setQuota] = useState(null);
+  const [showPrivacy, setShowPrivacy] = useState(false);
 
   // Load history from Firestore for signed-in users
   useEffect(() => {
     if (loading) return;
     loadHistoryForUser(user?.uid).then(setHistory);
+  }, [user, loading]);
+
+  // Load quota for signed-in users
+  useEffect(() => {
+    if (loading || !user) { setQuota(null); return; }
+    loadUsageDoc(user.uid).then(setQuota);
   }, [user, loading]);
 
   // Auto-proceed with onStart after successful auth from CTA
@@ -160,7 +272,17 @@ export default function LandingPage({ onStart, onAnalytics }) {
         }}
       >
         {user ? (
-          <UserMenu />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {onAdmin && (
+              <button
+                onClick={onAdmin}
+                style={{ fontSize: 11, color: tokens.color.textMuted, background: 'none', border: `1px solid ${tokens.color.border}`, borderRadius: 4, cursor: 'pointer', padding: '3px 8px' }}
+              >
+                Admin
+              </button>
+            )}
+            <UserMenu />
+          </div>
         ) : (
           <button
             onClick={() => setAuthOpen(true)}
@@ -241,29 +363,31 @@ export default function LandingPage({ onStart, onAnalytics }) {
             Interview<span style={{ fontWeight: 500 }}>Me</span>
           </span>
           {/* Welcome — visible on desktop only (inside flex group) */}
-          <p
-            className="landing-welcome-desktop"
-            style={{
-              fontFamily: tokens.font.body,
-              fontSize: 'clamp(11px, 1.2vw, 14px)',
-              fontWeight: 300,
-              color: 'rgba(255,255,255,0.3)',
-              letterSpacing: 3,
-              textTransform: 'uppercase',
-              margin: 0,
-              whiteSpace: 'nowrap',
-              textShadow: '0 0 30px rgba(62,232,181,0.15), 0 0 60px rgba(62,232,181,0.06)',
-            }}
-          >
-            Welcome,{' '}
-            {getUserFirstName(user) || (
-              <ScrambleText
-                words={WELCOME_NAMES}
-                interval={3000}
-                charDelay={80}
-              />
-            )}
-          </p>
+          <div className="landing-welcome-desktop" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <p
+              style={{
+                fontFamily: tokens.font.body,
+                fontSize: 'clamp(11px, 1.2vw, 14px)',
+                fontWeight: 300,
+                color: 'rgba(255,255,255,0.3)',
+                letterSpacing: 3,
+                textTransform: 'uppercase',
+                margin: 0,
+                whiteSpace: 'nowrap',
+                textShadow: '0 0 30px rgba(62,232,181,0.15), 0 0 60px rgba(62,232,181,0.06)',
+              }}
+            >
+              Welcome,{' '}
+              {getUserFirstName(user) || (
+                <ScrambleText
+                  words={WELCOME_NAMES}
+                  interval={3000}
+                  charDelay={80}
+                />
+              )}
+            </p>
+            <QuotaIndicator usage={quota} isAnon={!user} ctaHover={ctaHover} />
+          </div>
         </div>
       )}
 
@@ -281,6 +405,7 @@ export default function LandingPage({ onStart, onAnalytics }) {
             animation: 'fadeIn 2s ease both',
           }}
         >
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <p
             style={{
               fontFamily: tokens.font.body,
@@ -303,6 +428,8 @@ export default function LandingPage({ onStart, onAnalytics }) {
               />
             )}
           </p>
+          <QuotaIndicator usage={quota} isAnon={!user} ctaHover={ctaHover} />
+          </div>
         </div>
       )}
 
@@ -396,18 +523,10 @@ export default function LandingPage({ onStart, onAnalytics }) {
               fontSize: 14,
               letterSpacing: 0.5,
               color: ctaHover ? '#fff' : 'rgba(255,255,255,0.7)',
-              border: ctaHover
-                ? '1px solid rgba(255,255,255,0.35)'
-                : '1px solid rgba(255,255,255,0.12)',
-              background: ctaHover
-                ? 'rgba(255,255,255,0.12)'
-                : 'rgba(255,255,255,0.05)',
-              boxShadow: ctaHover
-                ? '0 0 24px rgba(255,255,255,0.08), 0 0 60px rgba(180,200,255,0.06)'
-                : 'none',
-              transition: ctaHover
-                ? 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
-                : 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
+              border: ctaHover ? '1px solid rgba(255,255,255,0.35)' : '1px solid rgba(255,255,255,0.12)',
+              background: ctaHover ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.05)',
+              boxShadow: ctaHover ? '0 0 24px rgba(255,255,255,0.08), 0 0 60px rgba(180,200,255,0.06)' : 'none',
+              transition: ctaHover ? 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)' : 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
             }}
           >
             Get Started
@@ -416,14 +535,12 @@ export default function LandingPage({ onStart, onAnalytics }) {
         </div>
       </div>
 
-      {/* Floating session button */}
-      {history.length > 0 && (
-        <FloatingSessionButton
-          count={history.length}
-          onClick={() => setHistoryOpen(true)}
-          onSideChange={setPanelSide}
-        />
-      )}
+      {/* Floating session button — always visible for analytics access */}
+      <FloatingSessionButton
+        count={history.length}
+        onClick={() => setHistoryOpen(true)}
+        onSideChange={setPanelSide}
+      />
 
       {/* History Panel (side drawer) */}
       <HistoryPanel
@@ -442,6 +559,41 @@ export default function LandingPage({ onStart, onAnalytics }) {
         open={authOpen && !user}
         onClose={() => setAuthOpen(false)}
       />
+
+      {/* Privacy footer */}
+      <div
+        style={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          zIndex: 10,
+          textAlign: 'center',
+          padding: '8px 16px',
+          fontSize: 11,
+          color: 'rgba(255,255,255,0.25)',
+          pointerEvents: 'none',
+        }}
+      >
+        By using InterviewMe you agree to our{' '}
+        <button
+          onClick={() => setShowPrivacy(true)}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: 'rgba(255,255,255,0.4)',
+            fontSize: 11,
+            padding: 0,
+            textDecoration: 'underline',
+            pointerEvents: 'auto',
+          }}
+        >
+          Privacy Policy
+        </button>
+      </div>
+
+      {showPrivacy && <PrivacyPage onClose={() => setShowPrivacy(false)} />}
     </div>
   );
 }

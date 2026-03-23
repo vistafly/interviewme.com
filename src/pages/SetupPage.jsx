@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { useMemo, useState, useCallback } from 'react';
+import { ArrowLeft, ArrowRight, Link } from 'lucide-react';
 import { tokens } from '../styles/tokens';
 import { useInterviewSetup } from '../hooks/useInterviewSetup';
 import { useAuth } from '../contexts/AuthContext';
@@ -8,9 +8,57 @@ import Hyperspeed from '../components/Hyperspeed';
 import LoadingDots from '../components/LoadingDots';
 import RotatingText from '../components/RotatingText';
 import UserMenu from '../components/UserMenu';
+import UpgradeModal from '../components/UpgradeModal';
 
 const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
   (navigator.maxTouchPoints > 1 && window.innerWidth < 1024);
+
+/** Strip common website boilerplate from pasted job description text */
+const BOILERPLATE_RE = [
+  /\bcookie\s*(categor|setting|preference|consent|policy|notice|banner)/i,
+  /\bopt[- ]?out\b.*\b(cookie|ads?|banner|tracking)\b/i,
+  /\b(advertising|functional(?:ity)?|strictly\s+necessary|analytics?)\s+cookies?\b/i,
+  /\bcookies?\s+allow\s+(delivery|our\s+website|you)\b/i,
+  /\bbrowser\s+cookies?\s+(?:also\s+)?make\b/i,
+  /\b(untick|uncheck)\b.*\b(checkbox|tickbox)\b/i,
+  /\bnon-?personali[sz]ed\s*(google\s*)?ads?\b/i,
+  /\bbanner\s*ads?\s*(being\s+)?display/i,
+  /\bpersonali[sz]ed\s+google\s+ads\b/i,
+  /\benable\s+the\s+tracking\s+of\s+each\s+logged/i,
+  /\bnecessary\s+cookies?\s+allow\b/i,
+  /\bsite\s+cookies?\s+help\s+to\s+ensure\b/i,
+  /\bsave\s*[/&]\s*update\s*(your\s*)?(setting|preference)/i,
+  /\b(register|sign\s*up)\s*(here\s*)?(to\s+apply|for\s+jobs?)\b/i,
+  /\b(login|log\s*in)\s+area\b/i,
+  /\bpost\s+a\s+job\b/i,
+  /\bsearch\s+database\s+of\b.*\bjobs?\b/i,
+  /\bsearch\s+(for\s+)?(further|more)\s+jobs?\b/i,
+  /\bjobs?\s+by\s+category\b/i,
+  /\bapply\s+for\s+jobs?\s*-?\s*jobseeker\b/i,
+  /\bjobseeker\s*\/\s*employer\b/i,
+  /\bfree\s+job\s+posting\b/i,
+  /\bsearch\s+categories\b/i,
+  /[©\u00a9]\s*\d{4}\b/,
+  /\ball\s+business\/?brand\s+names?\b/i,
+  /\bregistered\s+trademarks?\s+of\s+their\b/i,
+  /\bnot\s+affiliated\s+with\s+any\s+employer\b/i,
+  /\btransferred\s+to\s+a\s+third[- ]party\s+website\b/i,
+  /\bfind\s+&?\s*apply\s+for\s+(expat|english\s+teaching)\s+jobs?\b/i,
+  /\bjob\s+posting\s+web\s+site\b/i,
+  /\bgood\s+interactions\s+over\s+\d+\s+years?\b/i,
+  /\bview\s+this\s+new\b.*\bopening\s+in\b/i,
+  /\bapply\s+(?:now|for\s+jobs?)\s+(?:or|and)\s+learn\s+more\b/i,
+  /\bto\s+apply\s+now\s+or\s+learn\s+more\b/i,
+  /\bgo\s+to\s+the\s+application\s+page\b/i,
+  /\bapply\s+for\s+jobs?\s+in\s+your\s+niche\b/i,
+  /^(?:start\s+here\s*>*|interested\s+in\s+this\s+opportunity\s*\??|apply\s+now\s*!?|learn\s+more\s*!?|apply\s+to\s+job|post\s+a\s+job|register\s+here|login|sign\s+in|education\s*\/\s*teaching)$/i,
+];
+function cleanPastedJD(text) {
+  return text.split('\n').filter((line) => {
+    const t = line.trim();
+    return !t || !BOILERPLATE_RE.some((re) => re.test(t));
+  }).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
 
 const HYPERSPEED_PRESET = {
   onSpeedUp: () => {},
@@ -64,9 +112,39 @@ export default function SetupPage({ onBack, onReady }) {
     progress,
     generate,
     canGenerate,
+    fetchJobUrl,
+    fetching,
+    quotaExceeded,
+    quotaIsAnon,
+    clearQuota,
   } = useInterviewSetup();
   const [btnHover, setBtnHover] = useState(false);
   const [backHover, setBackHover] = useState(false);
+  const [jobUrl, setJobUrl] = useState('');
+
+  const handleFetchUrl = useCallback(() => {
+    if (!jobUrl.trim()) return;
+    fetchJobUrl(jobUrl.trim());
+  }, [jobUrl, fetchJobUrl]);
+
+  const handlePasteUrl = useCallback((e) => {
+    const pasted = (e.clipboardData || window.clipboardData).getData('text').trim();
+    if (/^https?:\/\/.+\..+/.test(pasted)) {
+      e.preventDefault();
+      setJobUrl(pasted);
+      fetchJobUrl(pasted);
+    }
+  }, [fetchJobUrl]);
+
+  const handlePasteDescription = useCallback((e) => {
+    const pasted = (e.clipboardData || window.clipboardData).getData('text');
+    if (!pasted) return;
+    const cleaned = cleanPastedJD(pasted);
+    if (cleaned !== pasted) {
+      e.preventDefault();
+      setJobDescription(cleaned);
+    }
+  }, [setJobDescription]);
 
   const effectOptions = useMemo(() => HYPERSPEED_PRESET, []);
 
@@ -337,6 +415,83 @@ export default function SetupPage({ onBack, onReady }) {
               Paste a job description · tailored mock interview
             </p>
 
+            {/* Job URL (optional) */}
+            <div
+              style={{
+                marginBottom: 'clamp(12px, 1.4vh, 20px)',
+                animation: 'fadeUp 0.7s var(--ease-snappy) 0.11s both',
+              }}
+            >
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: 10,
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: 1.5,
+                  color: tokens.color.textSecondary,
+                  marginBottom: 8,
+                }}
+              >
+                Job Posting URL <span style={{ color: tokens.color.textMuted, fontWeight: 400, textTransform: 'none' }}>(optional)</span>
+              </label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ flex: 1, position: 'relative' }}>
+                  <Link
+                    size={14}
+                    style={{
+                      position: 'absolute',
+                      left: 14,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      color: tokens.color.textMuted,
+                      pointerEvents: 'none',
+                    }}
+                  />
+                  <input
+                    type="url"
+                    value={jobUrl}
+                    onChange={(e) => setJobUrl(e.target.value)}
+                    onPaste={handlePasteUrl}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleFetchUrl(); }}
+                    placeholder="https://jobs.lever.co/company/..."
+                    disabled={fetching}
+                    style={{
+                      width: '100%',
+                      padding: 'clamp(10px, 1.2vw, 16px) clamp(12px, 1.5vw, 20px) clamp(10px, 1.2vw, 16px) 36px',
+                      fontSize: 'clamp(13px, 1.4vw, 17px)',
+                      background: 'rgba(17, 17, 20, 0.6)',
+                      border: `1px solid ${tokens.color.borderLight}`,
+                      borderRadius: tokens.radius.md,
+                      color: tokens.color.text,
+                      outline: 'none',
+                      opacity: fetching ? 0.5 : 1,
+                      transition: `border-color 0.2s ${tokens.ease.snappy}, opacity 0.2s ease`,
+                    }}
+                  />
+                </div>
+                <button
+                  onClick={handleFetchUrl}
+                  disabled={!jobUrl.trim() || fetching}
+                  style={{
+                    padding: '0 18px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    letterSpacing: 0.5,
+                    color: (!jobUrl.trim() || fetching) ? tokens.color.textMuted : tokens.color.text,
+                    background: (!jobUrl.trim() || fetching) ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.06)',
+                    border: `1px solid ${(!jobUrl.trim() || fetching) ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.1)'}`,
+                    borderRadius: tokens.radius.md,
+                    cursor: (!jobUrl.trim() || fetching) ? 'default' : 'pointer',
+                    transition: 'all 0.2s ease',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {fetching ? 'Fetching...' : 'Fetch'}
+                </button>
+              </div>
+            </div>
+
             {/* Company Name + Job Title row */}
             <div
               style={{
@@ -439,6 +594,7 @@ export default function SetupPage({ onBack, onReady }) {
               <textarea
                 value={jobDescription}
                 onChange={(e) => setJobDescription(e.target.value)}
+                onPaste={handlePasteDescription}
                 placeholder="Paste the full job description here..."
                 style={{
                   width: '100%',
@@ -567,9 +723,16 @@ export default function SetupPage({ onBack, onReady }) {
             <ArrowRight size={14} />
           </button>
 
-          {/* Error — centered below modal */}
+          {/* Error / info — centered below modal */}
           {error && (
-            <p style={{ fontSize: 12, color: tokens.color.error, margin: '8px 0 0', textAlign: 'center' }}>
+            <p style={{
+              fontSize: 12,
+              color: error.includes('paste the job description') || error.includes('paste the description')
+                ? tokens.color.warning || '#f0a030'
+                : tokens.color.error,
+              margin: '8px 0 0',
+              textAlign: 'center',
+            }}>
               {error}
             </p>
           )}
@@ -668,6 +831,7 @@ export default function SetupPage({ onBack, onReady }) {
           </div>
         )}
       </div>
+      <UpgradeModal open={quotaExceeded} isAnon={quotaIsAnon} onClose={clearQuota} />
     </div>
   );
 }

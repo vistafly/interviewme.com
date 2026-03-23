@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { speakText, createSpeechRecognition } from '../lib/speech';
 import { gradeAnswer } from '../lib/grading';
+import { gradeSession } from '../lib/api';
 import { useAudioAmplitude } from './useAudioAmplitude';
 import { setInterviewState } from '../lib/perfProfiler';
 import { requestMicStream, getCachedMicStream, releaseMicStream } from '../lib/micStream';
 
-export function useInterview(questions, lang = 'en-US') {
+export function useInterview(questions, lang = 'en-US', { jobTitle, company } = {}) {
   const [phase, setPhase] = useState('pre'); // pre | speaking | listening | feedback | review
   const [questionIndex, setQuestionIndex] = useState(0);
   const [seconds, setSeconds] = useState(120);
@@ -17,6 +18,9 @@ export function useInterview(questions, lang = 'en-US') {
   const [orbState, setOrbState] = useState('idle');
   const [errorMsg, setErrorMsg] = useState(null);
   const [micReady, setMicReady] = useState(false);
+  const [aiGrades, setAiGrades] = useState(null);
+  const [aiGrading, setAiGrading] = useState(false);
+  const [aiGradeError, setAiGradeError] = useState(null);
 
   // Request mic permission once upfront when the interview loads.
   // This triggers the browser prompt early (before any question starts)
@@ -230,12 +234,81 @@ export function useInterview(questions, lang = 'en-US') {
     setErrorMsg(null);
   }, [amplitudeRef]);
 
-  // Show review
+  // Bulk submit all answers at once (dev/test shortcut — skips sequential flow)
+  const bulkSubmit = useCallback((answers) => {
+    clearAllTimers();
+    stopRecording();
+    window.speechSynthesis?.cancel();
+    amplitudeRef.current = 0;
+
+    const entries = answers.map((answerText, i) => {
+      const q = questions[i];
+      if (!q) return null;
+      const trimmed = (answerText || '').trim();
+      const wc = trimmed ? trimmed.split(/\s+/).filter(Boolean).length : 0;
+      const timeUsed = 60;
+      const result = gradeAnswer(trimmed, q.keys || [], timeUsed)
+        || { pct: 0, grade: 'F', hits: [], total: q.keys?.length || 0 };
+      return {
+        question: q.q || '',
+        answer: trimmed,
+        grade: result?.grade || 'F',
+        pct: result?.pct || 0,
+        hits: result?.hits || [],
+        total: result?.total || 0,
+        timeUsed,
+        wordCount: wc,
+      };
+    }).filter(Boolean);
+
+    setSessionData(entries);
+    setQuestionIndex((questions?.length || 1) - 1);
+    setPhase('review');
+    setOrbState('idle');
+
+    // Fire AI grading using entries directly — sessionData hasn't updated yet in this closure
+    setAiGrading(true);
+    setAiGrades(null);
+    setAiGradeError(null);
+    gradeSession(entries, jobTitle, company)
+      .then((result) => {
+        if (result?.grades && Array.isArray(result.grades)) {
+          setAiGrades(result);
+        } else {
+          setAiGradeError('Unexpected response from grading API');
+        }
+      })
+      .catch((err) => {
+        setAiGradeError(err.message);
+      })
+      .finally(() => setAiGrading(false));
+  }, [clearAllTimers, stopRecording, questions, amplitudeRef, jobTitle, company]);
+
+  // Show review + trigger AI grading
   const showReview = useCallback(() => {
     setPhase('review');
     setOrbState('idle');
     amplitudeRef.current = 0;
-  }, [amplitudeRef]);
+
+    // Fire AI grading in the background
+    setAiGrading(true);
+    setAiGrades(null);
+    setAiGradeError(null);
+    gradeSession(sessionData, jobTitle, company)
+      .then((result) => {
+        if (result?.grades && Array.isArray(result.grades)) {
+          setAiGrades(result);
+        } else {
+          console.warn('[AI Grading] Unexpected response shape:', result);
+          setAiGradeError('Unexpected response from grading API');
+        }
+      })
+      .catch((err) => {
+        console.error('[AI Grading] Failed:', err.message);
+        setAiGradeError(err.message);
+      })
+      .finally(() => setAiGrading(false));
+  }, [amplitudeRef, sessionData, jobTitle, company]);
 
   // Feed live interview metrics into the perf profiler HUD
   useEffect(() => {
@@ -275,6 +348,25 @@ export function useInterview(questions, lang = 'en-US') {
     };
   }, [clearAllTimers, stopRecording, stopAnalyser]);
 
+  const restart = useCallback(() => {
+    clearAllTimers();
+    stopRecording();
+    stopAnalyser();
+    window.speechSynthesis?.cancel();
+    setPhase('pre');
+    setQuestionIndex(0);
+    setSeconds(120);
+    setTranscript('');
+    setGradeData(null);
+    setSessionData([]);
+    setTextInput('');
+    setOrbState('idle');
+    setErrorMsg(null);
+    setAiGrades(null);
+    setAiGrading(false);
+    setAiGradeError(null);
+  }, [clearAllTimers, stopRecording, stopAnalyser]);
+
   return {
     phase,
     questions,
@@ -293,6 +385,7 @@ export function useInterview(questions, lang = 'en-US') {
     finishAnswer,
     nextQuestion,
     retryQuestion,
+    bulkSubmit,
     showReview,
     answeredCount,
     allAnswered,
@@ -300,5 +393,9 @@ export function useInterview(questions, lang = 'en-US') {
     wordCount,
     setTextMode,
     micReady,
+    aiGrades,
+    aiGrading,
+    aiGradeError,
+    restart,
   };
 }

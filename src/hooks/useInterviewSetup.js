@@ -1,34 +1,21 @@
 import { useState, useCallback } from 'react';
 import { generateInterview } from '../lib/api';
+import { useAuth } from '../contexts/AuthContext';
 
 const MIN_GENERATING_MS = 5000;
 
 export function useInterviewSetup() {
-  // TODO: remove mock defaults before production
-  const [jobTitle, setJobTitle] = useState('Senior Frontend Engineer');
-  const [jobDescription, setJobDescription] = useState(
-    `We are looking for a Senior Frontend Engineer to join our team and help build the next generation of our web platform. You will work closely with designers, product managers, and backend engineers to deliver high-quality user experiences.
+  const { getIdToken } = useAuth();
 
-Responsibilities:
-- Design and implement responsive, accessible UI components using React and TypeScript
-- Collaborate with UX designers to translate wireframes and prototypes into polished interfaces
-- Optimize application performance including bundle size, rendering speed, and Core Web Vitals
-- Write unit and integration tests using Jest and React Testing Library
-- Participate in code reviews and mentor junior developers
-- Contribute to our design system and shared component library
-
-Requirements:
-- 5+ years of professional experience with JavaScript and modern frontend frameworks
-- Strong proficiency in React, TypeScript, HTML, and CSS
-- Experience with state management solutions such as Redux or Zustand
-- Familiarity with CI/CD pipelines, Git workflows, and agile development practices
-- Excellent communication skills and ability to work in a cross-functional team
-- Experience with performance profiling and optimization techniques`
-  );
-  const [companyName, setCompanyName] = useState('Acme Corp');
+  const [jobTitle, setJobTitle] = useState('');
+  const [jobDescription, setJobDescription] = useState('');
+  const [companyName, setCompanyName] = useState('');
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState(null);
   const [progress, setProgress] = useState(0);
+  const [fetching, setFetching] = useState(false);
+  const [quotaExceeded, setQuotaExceeded] = useState(false);
+  const [quotaIsAnon, setQuotaIsAnon] = useState(false);
 
   const jdWordCount = jobDescription.trim()
     ? jobDescription.trim().split(/\s+/).length
@@ -36,6 +23,32 @@ Requirements:
 
   const canGenerate =
     companyName.trim().length >= 2 && jobTitle.trim().length >= 2 && jdWordCount >= 50;
+
+  const fetchJobUrl = useCallback(async (url) => {
+    setFetching(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/scrape', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to fetch job posting');
+      if (data.text) setJobDescription(data.text);
+      // Auto-fill title and company if not already set
+      if (data.jobTitle) setJobTitle((prev) => prev || data.jobTitle);
+      if (data.companyName) setCompanyName((prev) => prev || data.companyName);
+      // Partial result — site was blocked but we got metadata from the URL
+      if (data.partial && data.message) {
+        setError(data.message);
+      }
+    } catch (err) {
+      setError(err.message || 'Could not fetch that URL. Try pasting the description manually.');
+    } finally {
+      setFetching(false);
+    }
+  }, []);
 
   const generate = useCallback(async () => {
     // Client-side validation
@@ -60,7 +73,8 @@ Requirements:
     const startedAt = Date.now();
 
     try {
-      const result = await generateInterview(jobDescription, companyName, jobTitle);
+      const token = await getIdToken();
+      const result = await generateInterview(jobDescription, companyName, jobTitle, token);
 
       // Ensure the animation plays long enough to feel intentional
       const elapsed = Date.now() - startedAt;
@@ -77,11 +91,23 @@ Requirements:
       return result;
     } catch (err) {
       setGenerating(false);
-      setError(err.message || 'Failed to generate interview. Please try again.');
       setProgress(0);
+
+      if (err.isQuotaError) {
+        setQuotaExceeded(true);
+        setQuotaIsAnon(err.isAnon ?? false);
+        return null;
+      }
+
+      setError(err.message || 'Failed to generate interview. Please try again.');
       return null;
     }
-  }, [jobDescription, companyName, jobTitle]);
+  }, [jobDescription, companyName, jobTitle, getIdToken]);
+
+  const clearQuota = useCallback(() => {
+    setQuotaExceeded(false);
+    setQuotaIsAnon(false);
+  }, []);
 
   return {
     jobDescription,
@@ -95,5 +121,10 @@ Requirements:
     progress,
     generate,
     canGenerate,
+    fetchJobUrl,
+    fetching,
+    quotaExceeded,
+    quotaIsAnon,
+    clearQuota,
   };
 }

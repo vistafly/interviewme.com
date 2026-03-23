@@ -205,6 +205,7 @@ export default function Orb({
   backgroundColor = '#000000',
   amplitudeRef = null,
   quality = null,
+  colorOverride = null,
 }) {
   const ctnDom = useRef(null);
 
@@ -213,9 +214,11 @@ export default function Orb({
   const forceHoverRef = useRef(forceHoverState);
   const rotateOnHoverRef = useRef(rotateOnHover);
   const ctaHoverRef = useRef(ctaHover);
+  const colorOverrideRef = useRef(colorOverride);
   forceHoverRef.current = forceHoverState;
   rotateOnHoverRef.current = rotateOnHover;
   ctaHoverRef.current = ctaHover;
+  colorOverrideRef.current = colorOverride;
 
   useEffect(() => {
     const container = ctnDom.current;
@@ -239,10 +242,23 @@ export default function Orb({
 
     const geometry = new Triangle(gl);
 
-    // Precompute hue-adjusted colors on CPU (instead of per-pixel in shader)
-    const c1 = adjustHueCPU(BASE1, hue);
-    const c2 = adjustHueCPU(BASE2, hue);
-    const c3 = adjustHueCPU(BASE3, hue);
+    // Precompute hue-adjusted base colors on CPU (instead of per-pixel in shader)
+    const baseC1 = adjustHueCPU(BASE1, hue);
+    const baseC2 = adjustHueCPU(BASE2, hue);
+    const baseC3 = adjustHueCPU(BASE3, hue);
+
+    // Store base color arrays for smooth lerp targets
+    const baseColors = {
+      c1: [baseC1[0], baseC1[1], baseC1[2]],
+      c2: [baseC2[0], baseC2[1], baseC2[2]],
+      c3: [baseC3[0], baseC3[1], baseC3[2]],
+    };
+
+    // Initialize with override if present on mount, otherwise base
+    const initOv = colorOverrideRef.current;
+    const c1 = initOv ? new Vec3(...initOv) : baseC1;
+    const c2 = initOv ? new Vec3(initOv[0] * 0.5, initOv[1] * 0.7, initOv[2] * 0.9) : baseC2;
+    const c3 = initOv ? new Vec3(initOv[0] * 0.2, initOv[1] * 0.1, initOv[2] * 0.15) : baseC3;
 
     const program = new Program(gl, {
       vertex: vert,
@@ -335,6 +351,21 @@ export default function Orb({
       const ampAlpha = 1 - Math.exp(-rate * dt);
       program.uniforms.audioAmp.value += (targetAmp - currentAmp) * ampAlpha;
 
+      // Smooth color transition — lerp toward colorOverride (or back to base)
+      const ov = colorOverrideRef.current;
+      const tC1 = ov || baseColors.c1;
+      const tC2 = ov ? [ov[0] * 0.5, ov[1] * 0.7, ov[2] * 0.9] : baseColors.c2;
+      const tC3 = ov ? [ov[0] * 0.2, ov[1] * 0.1, ov[2] * 0.15] : baseColors.c3;
+      const colorAlpha = 1 - Math.exp(-3 * dt);
+      const uc1 = program.uniforms.color1.value;
+      const uc2 = program.uniforms.color2.value;
+      const uc3 = program.uniforms.color3.value;
+      for (let ci = 0; ci < 3; ci++) {
+        uc1[ci] += (tC1[ci] - uc1[ci]) * colorAlpha;
+        uc2[ci] += (tC2[ci] - uc2[ci]) * colorAlpha;
+        uc3[ci] += (tC3[ci] - uc3[ci]) * colorAlpha;
+      }
+
       renderer.render({ scene: mesh });
     };
     rafId = requestAnimationFrame(update);
@@ -347,6 +378,7 @@ export default function Orb({
       if (gl.canvas.parentNode === container) container.removeChild(gl.canvas);
       gl.getExtension('WEBGL_lose_context')?.loseContext();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hue, hoverIntensity, backgroundColor]);
 

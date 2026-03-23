@@ -35,4 +35,7 @@ firestore-debug.log
 *.sln
 *.sw?
 
+# Debug tools (local only)
+debug/
+
 .vercel

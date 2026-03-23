@@ -27,11 +27,15 @@ import UserMenu from '../components/UserMenu';
 
 function avgToGrade(pct) {
   if (pct >= 93) return 'A';
+  if (pct >= 90) return 'A-';
   if (pct >= 87) return 'B+';
-  if (pct >= 80) return 'B';
-  if (pct >= 73) return 'C+';
-  if (pct >= 65) return 'C';
-  if (pct >= 55) return 'D';
+  if (pct >= 83) return 'B';
+  if (pct >= 80) return 'B-';
+  if (pct >= 77) return 'C+';
+  if (pct >= 73) return 'C';
+  if (pct >= 70) return 'C-';
+  if (pct >= 67) return 'D+';
+  if (pct >= 65) return 'D';
   return 'F';
 }
 
@@ -316,13 +320,17 @@ function EmptyState({ filtered, onClear }) {
 
 /* ---------- main page ---------- */
 
-export default function AnalyticsPage({ onBack }) {
+export default function AnalyticsPage({ onBack, onAdmin }) {
   const { user, loading } = useAuth();
   const [history, setHistory] = useState(() => loadHistory());
+  const [historyLoading, setHistoryLoading] = useState(true);
 
   useEffect(() => {
     if (loading) return;
-    loadHistoryForUser(user?.uid).then(setHistory);
+    setHistoryLoading(true);
+    loadHistoryForUser(user?.uid)
+      .then(setHistory)
+      .finally(() => setHistoryLoading(false));
   }, [user, loading]);
   const {
     companyFilter,
@@ -388,7 +396,19 @@ export default function AnalyticsPage({ onBack }) {
             Analytics
           </span>
         }
-        right={user ? <UserMenu /> : null}
+        right={user ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {onAdmin && (
+              <button
+                onClick={onAdmin}
+                style={{ fontSize: 11, color: tokens.color.textMuted, background: 'none', border: `1px solid ${tokens.color.border}`, borderRadius: 4, cursor: 'pointer', padding: '3px 8px' }}
+              >
+                Admin
+              </button>
+            )}
+            <UserMenu />
+          </div>
+        ) : null}
       />
 
       <div
@@ -443,7 +463,24 @@ export default function AnalyticsPage({ onBack }) {
         )}
 
         {/* Dashboard content */}
-        {analytics ? (
+        {(loading || historyLoading) ? (
+          <div
+            style={{
+              textAlign: 'center',
+              padding: '80px 0',
+              animation: 'fadeUp 0.8s var(--ease-snappy) both',
+            }}
+          >
+            <BarChart3
+              size={40}
+              color={tokens.color.textMuted}
+              style={{ marginBottom: 16, animation: 'pulse 1.5s ease-in-out infinite' }}
+            />
+            <p style={{ fontSize: 13, color: tokens.color.textSecondary }}>
+              Loading analytics…
+            </p>
+          </div>
+        ) : analytics ? (
           <>
             {/* Overview Cards */}
             <div

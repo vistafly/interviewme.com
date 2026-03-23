@@ -2,7 +2,7 @@ import { X, SlidersHorizontal } from 'lucide-react';
 import { tokens } from '../styles/tokens';
 import { gradeColor } from '../lib/grading';
 
-const GRADE_ORDER = ['A', 'B+', 'B', 'C+', 'C', 'D', 'F'];
+const GRADE_ORDER = ['A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'F'];
 const DATE_OPTIONS = [
   { label: '7d', value: '7d' },
   { label: '30d', value: '30d' },
